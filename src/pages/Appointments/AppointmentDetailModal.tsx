@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { StatusTag } from '../../components/StatusTag';
@@ -6,7 +6,7 @@ import { useCustomerStore } from '../../store/customerStore';
 import { useServiceStore } from '../../store/serviceStore';
 import { useStaffStore } from '../../store/staffStore';
 import { useInventoryStore } from '../../store/inventoryStore';
-import { Appointment, AppointmentStatus, AssignmentTypeMap } from '../../types';
+import { AppointmentStatus, AssignmentTypeMap } from '../../types';
 import { formatDateTime, formatDuration, diffInMinutes } from '../../utils/date';
 import { UserCircle, Scissors, Clock, CalendarCheck, Package, Phone, Play, CheckCircle, XCircle, Sparkles, UserCheck, Timer } from 'lucide-react';
 import { useAppointmentStore } from '../../store/appointmentStore';
@@ -14,30 +14,42 @@ import { useAppointmentStore } from '../../store/appointmentStore';
 interface AppointmentDetailModalProps {
   open: boolean;
   onClose: () => void;
-  appointment: Appointment | null;
+  appointmentId: string | null;
   onUpdateStatus: (id: string, status: AppointmentStatus) => void;
 }
 
-export function AppointmentDetailModal({ open, onClose, appointment, onUpdateStatus }: AppointmentDetailModalProps) {
-  const customer = useCustomerStore(s => appointment ? s.getCustomerById(appointment.customerId) : undefined);
-  const service = useServiceStore(s => appointment ? s.getServiceById(appointment.serviceId) : undefined);
-  const staff = useStaffStore(s => appointment ? s.getStaffById(appointment.staffId) : undefined);
-  const products = useInventoryStore(s => s.products);
+export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateStatus }: AppointmentDetailModalProps) {
+  const appointment = useAppointmentStore(s => 
+    appointmentId ? s.appointments.find(a => a.id === appointmentId) : undefined
+  );
   const startService = useAppointmentStore(s => s.startService);
   const completeService = useAppointmentStore(s => s.completeService);
+  const customer = useCustomerStore(s => 
+    appointment ? s.getCustomerById(appointment.customerId) : undefined
+  );
+  const service = useServiceStore(s => 
+    appointment ? s.getServiceById(appointment.serviceId) : undefined
+  );
+  const staff = useStaffStore(s => 
+    appointment ? s.getStaffById(appointment.staffId) : undefined
+  );
+  const products = useInventoryStore(s => s.products);
   const consumeProductsForService = useInventoryStore(s => s.consumeProductsForService);
 
-  if (!appointment || !customer || !service) return null;
-
-  const usedProducts = service.products.map(sp => ({
-    product: products.find(p => p.id === sp.productId),
-    quantity: sp.quantity,
-  })).filter(p => p.product);
-
   const actualDuration = useMemo(() => {
-    if (!appointment.actualStart || !appointment.actualEnd) return null;
+    if (!appointment?.actualStart || !appointment?.actualEnd) return null;
     return diffInMinutes(appointment.actualStart, appointment.actualEnd);
-  }, [appointment.actualStart, appointment.actualEnd]);
+  }, [appointment?.actualStart, appointment?.actualEnd]);
+
+  const usedProducts = useMemo(() => {
+    if (!service) return [];
+    return service.products.map(sp => ({
+      product: products.find(p => p.id === sp.productId),
+      quantity: sp.quantity,
+    })).filter(p => p.product);
+  }, [service, products]);
+
+  if (!open || !appointment || !customer || !service) return null;
 
   const handleStartService = () => {
     startService(appointment.id);

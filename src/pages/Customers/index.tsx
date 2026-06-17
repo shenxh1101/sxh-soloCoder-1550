@@ -56,12 +56,12 @@ export function Customers() {
     const alreadyHas = customerCoupons.some(c => !c.used && c.name.includes('生日'));
     
     if (alreadyHas) {
-      alert('该客户已有未使用的生日优惠券，是否重复发放？');
+      if (!confirm(`${customer.name} 已有未使用的生日优惠券，确认重复发放？`)) return;
     }
     
     issueCoupon(
       customer.id,
-      `生日专属${Math.round((1 - BIRTHDAY_DISCOUNT) * 10}折优惠券`,
+      `生日专属${Math.round(BIRTHDAY_DISCOUNT * 10)}折优惠券`,
       BIRTHDAY_DISCOUNT,
       30
     );

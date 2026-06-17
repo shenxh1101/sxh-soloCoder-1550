@@ -82,7 +82,7 @@ export function Dashboard() {
     }
     issueCoupon(
       customer.id,
-      `生日专属${Math.round((1 - BIRTHDAY_DISCOUNT) * 10)}折优惠券`,
+      `生日专属${Math.round(BIRTHDAY_DISCOUNT * 10)}折优惠券`,
       BIRTHDAY_DISCOUNT,
       30
     );

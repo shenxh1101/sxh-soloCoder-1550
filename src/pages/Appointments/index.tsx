@@ -9,13 +9,13 @@ import { StatusTag } from '../../components/StatusTag';
 import { Button } from '../../components/Button';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
-import { Appointment, AppointmentStatus, AppointmentStatusMap, AssignmentTypeMap } from '../../types';
+import { AppointmentStatus, AppointmentStatusMap, AssignmentTypeMap } from '../../types';
 import { formatDate, formatTime, formatDateCn, diffInMinutes, formatDuration } from '../../utils/date';
 import { Plus, CalendarCheck, UserCircle, Scissors, Search, Filter, Sparkles, UserCheck, Timer } from 'lucide-react';
 
 export function Appointments() {
   const [showNewModal, setShowNewModal] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [filterDate, setFilterDate] = useState(formatDate(new Date()));
   const [filterStatus, setFilterStatus] = useState<AppointmentStatus | 'all'>('all');
@@ -51,18 +51,10 @@ export function Appointments() {
 
   const handleUpdateStatus = (id: string, status: AppointmentStatus) => {
     updateAppointmentStatus(id, status);
-    
-    if (selectedAppointment?.id === id) {
-      setSelectedAppointment({ ...selectedAppointment, status });
-    }
   };
 
   const handleStartService = (id: string) => {
     startService(id);
-    const updated = appointments.find(a => a.id === id);
-    if (selectedAppointment?.id === id && updated) {
-      setSelectedAppointment({ ...updated });
-    }
   };
 
   const handleCompleteService = (id: string) => {
@@ -74,14 +66,15 @@ export function Appointments() {
         consumeProductsForService(apt.id, service.products);
       }
     }
-    const updated = appointments.find(a => a.id === id);
-    if (selectedAppointment?.id === id && updated) {
-      setSelectedAppointment({ ...updated });
-    }
   };
 
-  const openDetail = (appointment: Appointment) => {
-    setSelectedAppointment(appointment);
+  const handleAppointmentCreated = (date: string) => {
+    setFilterDate(date);
+    setShowNewModal(false);
+  };
+
+  const openDetail = (appointmentId: string) => {
+    setSelectedAppointmentId(appointmentId);
     setShowDetailModal(true);
   };
 
@@ -177,7 +170,7 @@ export function Appointments() {
               <Card 
                 key={appointment.id} 
                 className={`opacity-0 animate-fade-in-up cursor-pointer stagger-${(idx % 6) + 1}`}
-                onClick={() => openDetail(appointment)}
+                onClick={() => openDetail(appointment.id)}
               >
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-4">
@@ -269,12 +262,13 @@ export function Appointments() {
 
       <NewAppointmentModal 
         open={showNewModal} 
-        onClose={() => setShowNewModal(false)} 
+        onClose={() => setShowNewModal(false)}
+        onCreated={handleAppointmentCreated}
       />
       <AppointmentDetailModal
         open={showDetailModal}
-        onClose={() => { setShowDetailModal(false); setSelectedAppointment(null); }}
-        appointment={selectedAppointment}
+        onClose={() => { setShowDetailModal(false); setSelectedAppointmentId(null); }}
+        appointmentId={selectedAppointmentId}
         onUpdateStatus={handleUpdateStatus}
       />
     </div>

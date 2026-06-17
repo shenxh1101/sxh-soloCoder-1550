@@ -15,11 +15,12 @@ import { UserPlus, Search, Check, ChevronRight, Scissors, UserCircle, Clock, Cal
 interface NewAppointmentModalProps {
   open: boolean;
   onClose: () => void;
+  onCreated?: (date: string) => void;
 }
 
 type Step = 1 | 2 | 3 | 4;
 
-export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps) {
+export function NewAppointmentModal({ open, onClose, onCreated }: NewAppointmentModalProps) {
   const [step, setStep] = useState<Step>(1);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [newCustomerName, setNewCustomerName] = useState('');
@@ -120,7 +121,11 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
     });
 
     resetForm();
-    onClose();
+    if (onCreated) {
+      onCreated(selectedDate);
+    } else {
+      onClose();
+    }
   };
 
   const resetForm = () => {
