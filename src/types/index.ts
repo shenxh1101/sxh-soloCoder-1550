@@ -62,6 +62,13 @@ export const AppointmentStatusMap: Record<AppointmentStatus, string> = {
   cancelled: '已取消',
 };
 
+export type AssignmentType = 'auto' | 'specified';
+
+export const AssignmentTypeMap: Record<AssignmentType, string> = {
+  auto: '系统推荐',
+  specified: '客户指定',
+};
+
 export interface Appointment {
   id: string;
   customerId: string;
@@ -71,6 +78,9 @@ export interface Appointment {
   endTime: string;
   status: AppointmentStatus;
   isWalkIn: boolean;
+  assignmentType: AssignmentType;
+  actualStart?: string;
+  actualEnd?: string;
   createdAt: string;
 }
 

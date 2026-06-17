@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Product, InventoryLog, InventoryLogType, Service } from '../types';
+import { Product, InventoryLog, InventoryLogType, Service, ServiceProductItem } from '../types';
 import { mockProducts, mockInventoryLogs } from '../utils/mockData';
 import { loadFromStorage, saveToStorage } from '../utils/storage';
 
@@ -12,7 +12,7 @@ interface InventoryState {
   getProductById: (id: string) => Product | undefined;
   addInventory: (productId: string, quantity: number, remark?: string) => void;
   consumeInventory: (productId: string, quantity: number, remark?: string) => void;
-  consumeProductsForService: (service: Service, remark?: string) => void;
+  consumeProductsForService: (appointmentIdOrService: string | Service, productsOrRemark?: ServiceProductItem[] | string, remark?: string) => void;
   getLowStockProducts: () => Product[];
   addLog: (log: Omit<InventoryLog, 'id' | 'createdAt'>) => void;
 }
@@ -79,10 +79,23 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     get().addLog({ productId, type: 'consume', quantity, remark });
   },
   
-  consumeProductsForService: (service, remark = '服务消耗') => {
-    const productMap = new Map(get().products.map(p => [p.id, p]));
+  consumeProductsForService: (appointmentIdOrService, productsOrRemark, remark = '服务消耗') => {
+    let products: ServiceProductItem[] = [];
+    let logRemark = remark;
+    let serviceName = '';
+
+    if (typeof appointmentIdOrService === 'string') {
+      products = (productsOrRemark as ServiceProductItem[]) || [];
+      logRemark = typeof productsOrRemark === 'string' ? productsOrRemark : remark;
+    } else {
+      const service = appointmentIdOrService;
+      products = service.products;
+      serviceName = service.name;
+      logRemark = typeof productsOrRemark === 'string' ? productsOrRemark : '服务消耗';
+    }
+
     const updated = get().products.map(p => {
-      const usage = service.products.find(sp => sp.productId === p.id);
+      const usage = products.find(sp => sp.productId === p.id);
       if (usage) {
         return { ...p, stock: Math.max(0, p.stock - usage.quantity) };
       }
@@ -91,8 +104,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     set({ products: updated });
     saveToStorage(STORAGE_KEY_PRODUCTS, updated);
     
-    for (const sp of service.products) {
-      get().addLog({ productId: sp.productId, type: 'consume', quantity: sp.quantity, remark: `${remark} - ${service.name}` });
+    for (const sp of products) {
+      const suffix = serviceName ? ` - ${serviceName}` : '';
+      get().addLog({ productId: sp.productId, type: 'consume', quantity: sp.quantity, remark: `${logRemark}${suffix}` });
     }
   },
   

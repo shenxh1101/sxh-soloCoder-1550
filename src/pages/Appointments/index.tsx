@@ -9,9 +9,9 @@ import { StatusTag } from '../../components/StatusTag';
 import { Button } from '../../components/Button';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
-import { Appointment, AppointmentStatus, AppointmentStatusMap } from '../../types';
-import { formatDate, formatTime, formatDateCn } from '../../utils/date';
-import { Plus, CalendarCheck, UserCircle, Scissors, Search, Filter } from 'lucide-react';
+import { Appointment, AppointmentStatus, AppointmentStatusMap, AssignmentTypeMap } from '../../types';
+import { formatDate, formatTime, formatDateCn, diffInMinutes, formatDuration } from '../../utils/date';
+import { Plus, CalendarCheck, UserCircle, Scissors, Search, Filter, Sparkles, UserCheck, Timer } from 'lucide-react';
 
 export function Appointments() {
   const [showNewModal, setShowNewModal] = useState(false);
@@ -24,6 +24,8 @@ export function Appointments() {
 
   const appointments = useAppointmentStore(s => s.appointments);
   const updateAppointmentStatus = useAppointmentStore(s => s.updateAppointmentStatus);
+  const startService = useAppointmentStore(s => s.startService);
+  const completeService = useAppointmentStore(s => s.completeService);
   const consumeProductsForService = useInventoryStore(s => s.consumeProductsForService);
   const services = useServiceStore(s => s.services);
   const customers = useCustomerStore(s => s.customers);
@@ -50,18 +52,31 @@ export function Appointments() {
   const handleUpdateStatus = (id: string, status: AppointmentStatus) => {
     updateAppointmentStatus(id, status);
     
-    if (status === 'completed') {
-      const apt = appointments.find(a => a.id === id);
-      if (apt) {
-        const service = getServiceById(apt.serviceId);
-        if (service) {
-          consumeProductsForService(service);
-        }
-      }
-    }
-    
     if (selectedAppointment?.id === id) {
       setSelectedAppointment({ ...selectedAppointment, status });
+    }
+  };
+
+  const handleStartService = (id: string) => {
+    startService(id);
+    const updated = appointments.find(a => a.id === id);
+    if (selectedAppointment?.id === id && updated) {
+      setSelectedAppointment({ ...updated });
+    }
+  };
+
+  const handleCompleteService = (id: string) => {
+    const apt = appointments.find(a => a.id === id);
+    completeService(id);
+    if (apt) {
+      const service = getServiceById(apt.serviceId);
+      if (service) {
+        consumeProductsForService(apt.id, service.products);
+      }
+    }
+    const updated = appointments.find(a => a.id === id);
+    if (selectedAppointment?.id === id && updated) {
+      setSelectedAppointment({ ...updated });
     }
   };
 
@@ -154,6 +169,9 @@ export function Appointments() {
             const customer = customers.find(c => c.id === appointment.customerId);
             const service = services.find(s => s.id === appointment.serviceId);
             const staff = staffList.find(s => s.id === appointment.staffId);
+            const actualDuration = appointment.actualStart && appointment.actualEnd
+              ? formatDuration(diffInMinutes(appointment.actualStart, appointment.actualEnd))
+              : null;
 
             return (
               <Card 
@@ -172,7 +190,20 @@ export function Appointments() {
                         <p className="text-xs text-brown-400">{customer?.phone}</p>
                       </div>
                     </div>
-                    <StatusTag status={appointment.status} />
+                    <div className="flex flex-col items-end gap-1.5">
+                      <StatusTag status={appointment.status} />
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                        appointment.assignmentType === 'specified'
+                          ? 'bg-gold-50 text-gold-600 border border-gold-200'
+                          : 'bg-rose-50 text-rose-500 border border-rose-200'
+                      }`}>
+                        {appointment.assignmentType === 'specified' ? (
+                          <><UserCheck className="w-2.5 h-2.5" />{AssignmentTypeMap[appointment.assignmentType]}</>
+                        ) : (
+                          <><Sparkles className="w-2.5 h-2.5" />{AssignmentTypeMap[appointment.assignmentType]}</>
+                        )}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-2.5">
@@ -189,6 +220,12 @@ export function Appointments() {
                       <UserCircle className="w-4 h-4 text-rose-400" />
                       <span className="text-brown-600">{staff?.name || '未分配'}</span>
                     </div>
+                    {actualDuration && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Timer className="w-4 h-4 text-gold-500" />
+                        <span className="text-gold-600 font-medium">实际用时 {actualDuration}</span>
+                      </div>
+                    )}
                   </div>
 
                   {['pending', 'checked_in', 'in_service'].includes(appointment.status) && (
@@ -207,7 +244,7 @@ export function Appointments() {
                         <Button 
                           size="sm" 
                           className="flex-1"
-                          onClick={e => { e.stopPropagation(); handleUpdateStatus(appointment.id, 'in_service'); }}
+                          onClick={e => { e.stopPropagation(); handleStartService(appointment.id); }}
                         >
                           开始服务
                         </Button>
@@ -216,7 +253,7 @@ export function Appointments() {
                         <Button 
                           size="sm" 
                           className="flex-1"
-                          onClick={e => { e.stopPropagation(); handleUpdateStatus(appointment.id, 'completed'); }}
+                          onClick={e => { e.stopPropagation(); handleCompleteService(appointment.id); }}
                         >
                           完成服务
                         </Button>

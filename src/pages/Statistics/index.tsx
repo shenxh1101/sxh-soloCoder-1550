@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { BarChart3, TrendingUp, UserCircle, Scissors, CalendarCheck } from 'lucide-react';
+import { BarChart3, TrendingUp, UserCircle, Scissors, CalendarCheck, UserCheck } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
 
 const COLORS = ['#E8B4B8', '#D4A574', '#C46B72', '#A97449', '#D98C91', '#DEBF86'];
@@ -36,16 +36,24 @@ export function Statistics() {
   }, [completedAppointments, services]);
 
   const staffStats = useMemo(() => {
+    const allNonCancelled = appointments.filter(a => a.status !== 'cancelled');
+    
     return staffList.map(staff => {
-      const staffAppts = completedAppointments.filter(a => a.staffId === staff.id);
-      const specifiedAppts = appointments.filter(a => a.staffId === staff.id && a.status !== 'cancelled');
+      const staffCompleted = completedAppointments.filter(a => a.staffId === staff.id);
+      const staffAll = allNonCancelled.filter(a => a.staffId === staff.id);
+      const specifiedAll = staffAll.filter(a => a.assignmentType === 'specified');
+      const specifiedCompleted = staffCompleted.filter(a => a.assignmentType === 'specified');
       return {
         name: staff.name,
-        services: staffAppts.length,
-        specified: specifiedAppts.length,
-        rate: appointments.length > 0 ? Math.round((specifiedAppts.length / appointments.length) * 100) : 0,
+        services: staffCompleted.length,
+        specified: specifiedAll.length,
+        specifiedCompleted: specifiedCompleted.length,
+        rate: staffAll.length > 0 ? Math.round((specifiedAll.length / staffAll.length) * 100) : 0,
       };
-    }).sort((a, b) => b.services - a.services);
+    }).sort((a, b) => {
+      if (b.specified !== a.specified) return b.specified - a.specified;
+      return b.services - a.services;
+    });
   }, [completedAppointments, appointments, staffList]);
 
   const monthlyRevenue = useMemo(() => {
@@ -80,6 +88,7 @@ export function Statistics() {
 
   const topStaff = staffStats[0];
   const topService = serviceStats[0];
+  const topSpecifiedMax = Math.max(...staffStats.map(s => s.specified), 1);
 
   return (
     <div>
@@ -249,37 +258,47 @@ export function Statistics() {
         </Card>
 
         <Card className="p-6 col-span-2 opacity-0 animate-fade-in-up stagger-5">
-          <h3 className="font-serif text-lg font-semibold text-brown-700 mb-4">
-            美容师业绩排行
+          <h3 className="font-serif text-lg font-semibold text-brown-700 mb-4 flex items-center gap-2">
+            <UserCheck className="w-5 h-5 text-gold-500" />
+            美容师客户指定排行
+            <span className="ml-auto text-xs text-brown-400 font-normal flex items-center gap-1">
+              按客户主动指定次数排序
+            </span>
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {staffStats.map((staff, idx) => (
               <div key={staff.name} className="flex items-center gap-4">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
-                  idx === 0 ? 'bg-gradient-to-br from-gold-400 to-gold-500 text-white' :
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                  idx === 0 ? 'bg-gradient-to-br from-gold-400 to-gold-500 text-white shadow-soft' :
                   idx === 1 ? 'bg-gradient-to-br from-brown-300 to-brown-400 text-white' :
                   idx === 2 ? 'bg-gradient-to-br from-rose-300 to-rose-400 text-white' :
                   'bg-cream-100 text-brown-500'
                 }`}>
                   {idx + 1}
                 </div>
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-300 to-gold-300 flex items-center justify-center text-white font-medium">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-rose-300 to-gold-300 flex items-center justify-center text-white font-medium flex-shrink-0">
                   {staff.name[0]}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5 gap-2 flex-wrap">
                     <span className="font-medium text-brown-700">{staff.name}</span>
-                    <span className="text-sm text-rose-500 font-medium">{staff.services} 次服务</span>
+                    <div className="flex items-center gap-3 text-xs flex-shrink-0">
+                      <span className="text-brown-400">服务 <span className="font-medium text-brown-600">{staff.services}</span> 次</span>
+                      <span className="text-gold-600 font-semibold flex items-center gap-0.5 bg-gold-50 px-2 py-0.5 rounded-full">
+                        <UserCheck className="w-3 h-3" />
+                        指定 {staff.specified} 次
+                      </span>
+                    </div>
                   </div>
-                  <div className="w-full bg-cream-200 rounded-full h-2">
+                  <div className="w-full bg-cream-200 rounded-full h-2.5">
                     <div 
-                      className="h-2 rounded-full bg-gradient-to-r from-rose-400 to-gold-400 transition-all"
-                      style={{ width: `${Math.min(100, (staff.services / (topStaff?.services || 1)) * 100)}%` }}
+                      className="h-2.5 rounded-full bg-gradient-to-r from-gold-400 via-rose-400 to-rose-500 transition-all"
+                      style={{ width: `${Math.min(100, (staff.specified / topSpecifiedMax) * 100)}%` }}
                     />
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gold-600">{staff.rate}%</p>
+                <div className="text-right flex-shrink-0 min-w-[60px]">
+                  <p className="text-sm font-bold text-gold-600">{staff.rate}%</p>
                   <p className="text-xs text-brown-400">指定率</p>
                 </div>
               </div>

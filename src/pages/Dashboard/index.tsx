@@ -1,11 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useAppointmentStore } from '../../store/appointmentStore';
 import { useCustomerStore } from '../../store/customerStore';
 import { useInventoryStore } from '../../store/inventoryStore';
 import { useServiceStore } from '../../store/serviceStore';
 import { useStaffStore } from '../../store/staffStore';
+import { useCouponStore } from '../../store/couponStore';
 import { PageHeader, Card } from '../../components/Layout/PageHeader';
 import { StatusTag } from '../../components/StatusTag';
+import { Button } from '../../components/Button';
 import { 
   CalendarCheck, 
   Clock, 
@@ -16,10 +18,15 @@ import {
   Package,
   ChevronRight,
   UserCircle,
-  Scissors
+  Scissors,
+  Gift,
+  Ticket
 } from 'lucide-react';
 import { formatTime, formatDateCn, getDaysUntilBirthday, isBirthdaySoon, isTodayFn } from '../../utils/date';
 import { useNavigate } from 'react-router-dom';
+import { Customer } from '../../types';
+
+const BIRTHDAY_DISCOUNT = 0.8;
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -28,6 +35,8 @@ export function Dashboard() {
   const products = useInventoryStore(s => s.products);
   const services = useServiceStore(s => s.services);
   const staffList = useStaffStore(s => s.staffList);
+  const { issueCoupon, getCustomerCoupons } = useCouponStore();
+  const [couponToast, setCouponToast] = useState<string | null>(null);
 
   const todayAppointments = useMemo(() => 
     appointments
@@ -65,8 +74,30 @@ export function Dashboard() {
     { label: '已完成', value: completedCount, icon: CheckCircle2, gradient: 'from-brown-400 to-brown-500' },
   ];
 
+  const handleIssueBirthdayCoupon = (customer: Customer) => {
+    const existing = getCustomerCoupons(customer.id);
+    const hasUnused = existing.some(c => !c.used && c.name.includes('生日'));
+    if (hasUnused) {
+      if (!confirm(`${customer.name} 已有未使用的生日优惠券，确认重复发放？`)) return;
+    }
+    issueCoupon(
+      customer.id,
+      `生日专属${Math.round((1 - BIRTHDAY_DISCOUNT) * 10)}折优惠券`,
+      BIRTHDAY_DISCOUNT,
+      30
+    );
+    setCouponToast(`已为 ${customer.name} 发放生日优惠券`);
+    setTimeout(() => setCouponToast(null), 2500);
+  };
+
   return (
-    <div>
+    <div className="relative">
+      {couponToast && (
+        <div className="fixed top-6 right-6 z-[100] bg-gradient-to-r from-rose-500 to-rose-400 text-white px-5 py-3 rounded-xl shadow-2xl animate-fade-in-up flex items-center gap-2">
+          <Gift className="w-5 h-5" />
+          <span className="font-medium">{couponToast}</span>
+        </div>
+      )}
       <PageHeader 
         title={formatDateCn(new Date())}
         description={`欢迎回来，今天共有 ${todayAppointments.length} 个预约，预计营收 ¥${todayRevenue}`}
@@ -178,8 +209,8 @@ export function Dashboard() {
               ) : (
                 <div className="divide-y divide-rose-50">
                   {birthdayCustomers.slice(0, 5).map(customer => (
-                    <div key={customer.id} className="p-4 hover:bg-cream-50 rounded-lg transition-colors cursor-pointer flex items-center justify-between">
-                      <div className="flex items-center gap-3">
+                    <div key={customer.id} className="p-4 hover:bg-cream-50 rounded-lg transition-colors flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/customers')}>
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-300 to-rose-300 flex items-center justify-center text-white font-medium">
                           {customer.name[0]}
                         </div>
@@ -188,9 +219,19 @@ export function Dashboard() {
                           <p className="text-xs text-brown-400">{customer.phone}</p>
                         </div>
                       </div>
-                      <span className="text-xs text-gold-600 bg-gold-50 px-2 py-1 rounded-full animate-breathe">
-                        {getDaysUntilBirthday(customer.birthday)}天后
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gold-600 bg-gold-50 px-2 py-1 rounded-full animate-breathe flex-shrink-0">
+                          {getDaysUntilBirthday(customer.birthday)}天后
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleIssueBirthdayCoupon(customer)}
+                          title="发送生日优惠券"
+                        >
+                          <Ticket className="w-4 h-4 text-rose-500" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

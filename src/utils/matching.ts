@@ -14,15 +14,21 @@ export function findAvailableStaff(
   
   const available: { staff: Staff; score: number; todayCount: number }[] = [];
   
+  const DEFAULT_WORK_START = '09:00';
+  const DEFAULT_WORK_END = '21:00';
+  
   for (const staff of staffList) {
     if (!staff.active) continue;
     
     const schedule = schedules.find(s => s.staffId === staff.id && s.date === targetDate);
     
-    if (!schedule || schedule.isDayOff) continue;
+    if (schedule && schedule.isDayOff) continue;
     
-    const workStart = parseISO(`${targetDate}T${schedule.workStart}:00`);
-    const workEnd = parseISO(`${targetDate}T${schedule.workEnd}:00`);
+    const workStartStr = schedule ? schedule.workStart : DEFAULT_WORK_START;
+    const workEndStr = schedule ? schedule.workEnd : DEFAULT_WORK_END;
+    
+    const workStart = parseISO(`${targetDate}T${workStartStr}:00`);
+    const workEnd = parseISO(`${targetDate}T${workEndStr}:00`);
     const apptStart = parseISO(startTime);
     const apptEnd = parseISO(endTime);
     

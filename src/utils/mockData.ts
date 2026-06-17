@@ -42,14 +42,14 @@ function createTime(dayOffset: number, hour: number, minute: number, durationMin
 }
 
 export const mockAppointments: Appointment[] = [
-  { id: 'a1', customerId: 'c1', serviceId: 's1', staffId: 'st1', ...createTime(0, 10, 0, 60), status: 'completed', isWalkIn: false, createdAt: '2026-06-16T09:00:00' },
-  { id: 'a2', customerId: 'c2', serviceId: 's4', staffId: 'st2', ...createTime(0, 11, 0, 90), status: 'in_service', isWalkIn: false, createdAt: '2026-06-16T09:30:00' },
-  { id: 'a3', customerId: 'c3', serviceId: 's6', staffId: 'st3', ...createTime(0, 13, 0, 60), status: 'checked_in', isWalkIn: false, createdAt: '2026-06-16T10:00:00' },
-  { id: 'a4', customerId: 'c4', serviceId: 's2', staffId: 'st1', ...createTime(0, 14, 30, 90), status: 'pending', isWalkIn: false, createdAt: '2026-06-16T10:15:00' },
-  { id: 'a5', customerId: 'c5', serviceId: 's8', staffId: 'st4', ...createTime(0, 15, 0, 30), status: 'pending', isWalkIn: true, createdAt: '2026-06-17T08:00:00' },
-  { id: 'a6', customerId: 'c6', serviceId: 's5', staffId: 'st2', ...createTime(0, 16, 0, 60), status: 'pending', isWalkIn: false, createdAt: '2026-06-16T14:00:00' },
-  { id: 'a7', customerId: 'c1', serviceId: 's3', staffId: 'st4', ...createTime(1, 10, 0, 30), status: 'pending', isWalkIn: false, createdAt: '2026-06-16T15:00:00' },
-  { id: 'a8', customerId: 'c7', serviceId: 's7', staffId: 'st3', ...createTime(1, 14, 0, 90), status: 'pending', isWalkIn: false, createdAt: '2026-06-16T16:30:00' },
+  { id: 'a1', customerId: 'c1', serviceId: 's1', staffId: 'st1', ...createTime(0, 10, 0, 60), status: 'completed', isWalkIn: false, assignmentType: 'specified', actualStart: createTime(0, 10, 2, 0).startTime, actualEnd: createTime(0, 11, 0, 0).startTime, createdAt: '2026-06-16T09:00:00' },
+  { id: 'a2', customerId: 'c2', serviceId: 's4', staffId: 'st2', ...createTime(0, 11, 0, 90), status: 'in_service', isWalkIn: false, assignmentType: 'auto', actualStart: createTime(0, 11, 5, 0).startTime, createdAt: '2026-06-16T09:30:00' },
+  { id: 'a3', customerId: 'c3', serviceId: 's6', staffId: 'st3', ...createTime(0, 13, 0, 60), status: 'checked_in', isWalkIn: false, assignmentType: 'auto', createdAt: '2026-06-16T10:00:00' },
+  { id: 'a4', customerId: 'c4', serviceId: 's2', staffId: 'st1', ...createTime(0, 14, 30, 90), status: 'pending', isWalkIn: false, assignmentType: 'specified', createdAt: '2026-06-16T10:15:00' },
+  { id: 'a5', customerId: 'c5', serviceId: 's8', staffId: 'st4', ...createTime(0, 15, 0, 30), status: 'pending', isWalkIn: true, assignmentType: 'auto', createdAt: '2026-06-17T08:00:00' },
+  { id: 'a6', customerId: 'c6', serviceId: 's5', staffId: 'st2', ...createTime(0, 16, 0, 60), status: 'pending', isWalkIn: false, assignmentType: 'specified', createdAt: '2026-06-16T14:00:00' },
+  { id: 'a7', customerId: 'c1', serviceId: 's3', staffId: 'st4', ...createTime(1, 10, 0, 30), status: 'pending', isWalkIn: false, assignmentType: 'auto', createdAt: '2026-06-16T15:00:00' },
+  { id: 'a8', customerId: 'c7', serviceId: 's7', staffId: 'st3', ...createTime(1, 14, 0, 90), status: 'pending', isWalkIn: false, assignmentType: 'specified', createdAt: '2026-06-16T16:30:00' },
 ];
 
 export const mockProducts: Product[] = [

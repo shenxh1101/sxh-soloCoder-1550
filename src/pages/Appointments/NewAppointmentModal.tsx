@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Modal } from '../../components/Modal';
 import { Button } from '../../components/Button';
 import { useCustomerStore } from '../../store/customerStore';
@@ -6,11 +6,11 @@ import { useServiceStore } from '../../store/serviceStore';
 import { useStaffStore } from '../../store/staffStore';
 import { useAppointmentStore } from '../../store/appointmentStore';
 import { useInventoryStore } from '../../store/inventoryStore';
-import { Customer, ServiceCategory, ServiceCategoryMap, Appointment } from '../../types';
+import { Customer, ServiceCategory, ServiceCategoryMap, Appointment, AssignmentType } from '../../types';
 import { findAvailableStaff } from '../../utils/matching';
 import { formatDate, formatDateTime } from '../../utils/date';
 import { addMinutes, parseISO, format } from 'date-fns';
-import { UserPlus, Search, Check, ChevronRight, Scissors, UserCircle, Clock, CalendarCheck } from 'lucide-react';
+import { UserPlus, Search, Check, ChevronRight, Scissors, UserCircle, Clock, CalendarCheck, Sparkles, UserCheck } from 'lucide-react';
 
 interface NewAppointmentModalProps {
   open: boolean;
@@ -30,6 +30,7 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
   const [selectedTime, setSelectedTime] = useState('10:00');
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [assignmentType, setAssignmentType] = useState<AssignmentType>('auto');
 
   const { customers, searchCustomers, addCustomer } = useCustomerStore();
   const services = useServiceStore(s => s.services);
@@ -52,6 +53,20 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
       startTime.toISOString(), endTime.toISOString()
     );
   }, [selectedService, selectedDate, selectedTime, staffList, appointments, schedules]);
+
+  useEffect(() => {
+    if (assignmentType === 'auto' && availableStaff.length > 0) {
+      setSelectedStaffId(availableStaff[0].staff.id);
+    }
+  }, [availableStaff, assignmentType]);
+
+  const handleStaffSelect = (staffId: string) => {
+    setSelectedStaffId(staffId);
+    const recommendedId = availableStaff[0]?.staff.id;
+    if (staffId !== recommendedId) {
+      setAssignmentType('specified');
+    }
+  };
 
   const canProceed = () => {
     switch (step) {
@@ -101,6 +116,7 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
       endTime: endTime.toISOString(),
       status: 'pending',
       isWalkIn: false,
+      assignmentType,
     });
 
     resetForm();
@@ -118,6 +134,7 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
     setSelectedTime('10:00');
     setSelectedStaffId('');
     setIsNewCustomer(false);
+    setAssignmentType('auto');
   };
 
   const stepLabels = ['选择客户', '选择项目', '选择时间', '分配美容师'];
@@ -342,6 +359,36 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
 
       {step === 4 && (
         <div className="space-y-4">
+          <div className="flex items-center gap-2 p-1 bg-cream-100 rounded-xl">
+            <button
+              onClick={() => {
+                setAssignmentType('auto');
+                if (availableStaff.length > 0) {
+                  setSelectedStaffId(availableStaff[0].staff.id);
+                }
+              }}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                assignmentType === 'auto'
+                  ? 'bg-white shadow-sm text-rose-500'
+                  : 'text-brown-500 hover:text-brown-700'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              系统智能推荐
+            </button>
+            <button
+              onClick={() => setAssignmentType('specified')}
+              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5 ${
+                assignmentType === 'specified'
+                  ? 'bg-white shadow-sm text-gold-600'
+                  : 'text-brown-500 hover:text-brown-700'
+              }`}
+            >
+              <UserCheck className="w-4 h-4" />
+              客户主动指定
+            </button>
+          </div>
+
           {availableStaff.length === 0 ? (
             <div className="py-12 text-center text-brown-400">
               <UserCircle className="w-12 h-12 mx-auto mb-4 opacity-30" />
@@ -349,10 +396,10 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
               <p className="text-sm mt-2">请更换时间或项目</p>
             </div>
           ) : (
-            availableStaff.map(({ staff, score, todayCount }) => (
+            availableStaff.map(({ staff, score, todayCount }, idx) => (
               <div
                 key={staff.id}
-                onClick={() => setSelectedStaffId(staff.id)}
+                onClick={() => handleStaffSelect(staff.id)}
                 className={`p-4 rounded-xl cursor-pointer transition-all ${
                   selectedStaffId === staff.id
                     ? 'bg-rose-50 border-2 border-rose-300'
@@ -366,8 +413,20 @@ export function NewAppointmentModal({ open, onClose }: NewAppointmentModalProps)
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-medium text-brown-700">{staff.name}</p>
-                      {score > 0 && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gold-100 text-gold-600">推荐</span>
+                      {idx === 0 && assignmentType === 'auto' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-500 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          最优推荐
+                        </span>
+                      )}
+                      {score > 0 && assignmentType !== 'auto' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gold-100 text-gold-600">擅长匹配</span>
+                      )}
+                      {selectedStaffId === staff.id && assignmentType === 'specified' && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gold-100 text-gold-600 flex items-center gap-1">
+                          <UserCheck className="w-3 h-3" />
+                          客户指定
+                        </span>
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-brown-400">

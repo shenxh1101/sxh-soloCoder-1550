@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCustomerStore } from '../../store/customerStore';
 import { useAppointmentStore } from '../../store/appointmentStore';
 import { useServiceStore } from '../../store/serviceStore';
+import { useCouponStore } from '../../store/couponStore';
 import { PageHeader, Card } from '../../components/Layout/PageHeader';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
-import { Customer, CustomerLevel } from '../../types';
-import { formatDateTime, getDaysUntilBirthday, isBirthdaySoon } from '../../utils/date';
-import { Plus, Search, Phone, Cake, CalendarCheck, Scissors, Star, Gift } from 'lucide-react';
+import { Customer, CustomerLevel, AssignmentTypeMap, Coupon } from '../../types';
+import { formatDateTime, formatDate, getDaysUntilBirthday, isBirthdaySoon, diffInMinutes, formatDuration } from '../../utils/date';
+import { Plus, Search, Phone, Cake, CalendarCheck, Scissors, Star, Gift, Ticket, Check as CheckIcon, Sparkles, UserCheck, Timer } from 'lucide-react';
 
 const levelMap: Record<CustomerLevel, { label: string; color: string }> = {
   1: { label: '普通会员', color: 'bg-brown-50 text-brown-500 border-brown-200' },
@@ -15,14 +16,18 @@ const levelMap: Record<CustomerLevel, { label: string; color: string }> = {
   3: { label: '金卡会员', color: 'bg-gold-50 text-gold-600 border-gold-200' },
 };
 
+const BIRTHDAY_DISCOUNT = 0.8;
+
 export function Customers() {
   const { customers, searchCustomers, addCustomer, updateCustomer } = useCustomerStore();
   const appointments = useAppointmentStore(s => s.appointments);
   const services = useServiceStore(s => s.services);
+  const { coupons, issueCoupon, getCustomerCoupons, markCouponUsed } = useCouponStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showCouponToast, setShowCouponToast] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -46,6 +51,25 @@ export function Customers() {
     setShowNewModal(false);
   };
 
+  const handleIssueBirthdayCoupon = (customer: Customer, source = '手动') => {
+    const customerCoupons = getCustomerCoupons(customer.id);
+    const alreadyHas = customerCoupons.some(c => !c.used && c.name.includes('生日'));
+    
+    if (alreadyHas) {
+      alert('该客户已有未使用的生日优惠券，是否重复发放？');
+    }
+    
+    issueCoupon(
+      customer.id,
+      `生日专属${Math.round((1 - BIRTHDAY_DISCOUNT) * 10}折优惠券`,
+      BIRTHDAY_DISCOUNT,
+      30
+    );
+    
+    setShowCouponToast(`已为 ${customer.name} 发放生日优惠券！`);
+    setTimeout(() => setShowCouponToast(null), 2500);
+  };
+
   const customerAppointments = (customerId: string) => 
     appointments.filter(a => a.customerId === customerId).length;
 
@@ -66,8 +90,25 @@ export function Customers() {
         .slice(0, 10)
     : [];
 
+  const customerCouponList = useMemo(() => {
+    return selectedCustomer ? getCustomerCoupons(selectedCustomer.id) : [];
+  }, [selectedCustomer, coupons, getCustomerCoupons]);
+
+  const handleMarkCouponUsed = (couponId: string) => {
+    if (confirm('确认此优惠券已使用？')) {
+      markCouponUsed(couponId);
+    }
+  };
+
   return (
-    <div>
+    <div className="relative">
+      {showCouponToast && (
+        <div className="fixed top-6 right-6 z-[100] bg-gradient-to-r from-rose-500 to-rose-400 text-white px-5 py-3 rounded-xl shadow-2xl animate-fade-in-up flex items-center gap-2">
+          <Gift className="w-5 h-5" />
+          <span className="font-medium">{showCouponToast}</span>
+        </div>
+      )}
+
       <PageHeader 
         title="客户管理"
         description="管理客户档案和会员信息"
@@ -92,7 +133,10 @@ export function Customers() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredCustomers.map((customer, idx) => (
+        {filteredCustomers.map((customer, idx) => {
+          const daysUntil = customer.birthday ? getDaysUntilBirthday(customer.birthday) : 999;
+          const isSoon7 = customer.birthday && isBirthdaySoon(customer.birthday, 7);
+          return (
           <Card 
             key={customer.id} 
             className="cursor-pointer opacity-0 animate-fade-in-up"
@@ -116,6 +160,16 @@ export function Customers() {
                     {customer.phone}
                   </div>
                 </div>
+                {isSoon7 && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="animate-breathe"
+                    onClick={(e) => { e.stopPropagation(); handleIssueBirthdayCoupon(customer); }}
+                  >
+                    <Ticket className="w-3.5 h-3.5 mr-1" /> 发券
+                  </Button>
+                )}
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="p-2 bg-cream-50 rounded-lg">
@@ -130,7 +184,7 @@ export function Customers() {
                   {customer.birthday && isBirthdaySoon(customer.birthday, 30) ? (
                     <>
                       <p className="text-sm font-semibold text-rose-500 animate-breathe">
-                        {getDaysUntilBirthday(customer.birthday)}天后
+                        {daysUntil}天后
                       </p>
                       <p className="text-xs text-rose-400 flex items-center justify-center gap-1">
                         <Cake className="w-3 h-3" /> 生日
@@ -146,7 +200,8 @@ export function Customers() {
               </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       <Modal
@@ -226,8 +281,8 @@ export function Customers() {
               <div className="w-16 h-16 rounded-full bg-gradient-to-br from-rose-300 to-gold-300 flex items-center justify-center text-white font-medium text-2xl shadow-soft">
                 {selectedCustomer.name[0]}
               </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <h3 className="font-serif font-bold text-xl text-brown-700">{selectedCustomer.name}</h3>
                   <span className={`px-2.5 py-1 rounded-full text-xs border ${levelMap[selectedCustomer.level].color}`}>
                     {levelMap[selectedCustomer.level].label}
@@ -238,6 +293,15 @@ export function Customers() {
                   {selectedCustomer.phone}
                 </div>
               </div>
+              {selectedCustomer.birthday && isBirthdaySoon(selectedCustomer.birthday, 7) && (
+                <Button
+                  size="sm"
+                  onClick={() => handleIssueBirthdayCoupon(selectedCustomer)}
+                >
+                  <Ticket className="w-4 h-4 mr-1.5" />
+                  发生日券
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-3 gap-4">
@@ -262,6 +326,64 @@ export function Customers() {
 
             <div>
               <h4 className="font-medium text-brown-700 mb-3 flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-gold-500" />
+                优惠券 ({customerCouponList.filter(c => !c.used).length}张可用)
+              </h4>
+              {customerCouponList.length === 0 ? (
+                <div className="py-6 text-center text-brown-400 text-sm border-2 border-dashed border-cream-200 rounded-xl">
+                  暂无优惠券，生日临近时可发放生日专属优惠券
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-56 overflow-y-auto">
+                  {customerCouponList.map(coupon => (
+                    <div 
+                      key={coupon.id} 
+                      className={`p-4 rounded-xl flex items-center gap-4 border-2 transition-all ${
+                        coupon.used
+                          ? 'bg-cream-50 border-cream-100 opacity-60'
+                          : 'bg-gradient-to-r from-gold-50 to-rose-50 border-gold-200'
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center ${
+                        coupon.used
+                          ? 'bg-brown-100 text-brown-400'
+                          : 'bg-gradient-to-br from-rose-400 to-gold-400 text-white'
+                      }`}>
+                        <span className="text-xl font-bold">{Math.round(coupon.discount * 10)}</span>
+                        <span className="text-[10px] -mt-0.5">折</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="font-medium text-brown-700 truncate">{coupon.name}</p>
+                          {coupon.used ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brown-100 text-brown-500 flex items-center gap-0.5">
+                              <CheckIcon className="w-2.5 h-2.5" /> 已使用
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-500 animate-breathe">
+                              可使用
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-brown-400">有效期至：{formatDate(coupon.expireDate)}</p>
+                      </div>
+                      {!coupon.used && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleMarkCouponUsed(coupon.id)}
+                        >
+                          标记使用
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h4 className="font-medium text-brown-700 mb-3 flex items-center gap-2">
                 <CalendarCheck className="w-4 h-4 text-rose-400" />
                 最近到店记录
               </h4>
@@ -271,13 +393,37 @@ export function Customers() {
                 ) : (
                   customerApptList.map(apt => {
                     const service = services.find(s => s.id === apt.serviceId);
+                    const actualDuration = apt.actualStart && apt.actualEnd
+                      ? formatDuration(diffInMinutes(apt.actualStart, apt.actualEnd))
+                      : null;
                     return (
-                      <div key={apt.id} className="flex items-center justify-between p-3 bg-cream-50 rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium text-brown-700">{service?.name || '未知项目'}</p>
-                          <p className="text-xs text-brown-400">{formatDateTime(apt.startTime)}</p>
+                      <div key={apt.id} className="flex items-center justify-between p-3 bg-cream-50 rounded-lg gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <p className="text-sm font-medium text-brown-700">{service?.name || '未知项目'}</p>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                              apt.assignmentType === 'specified'
+                                ? 'bg-gold-50 text-gold-600 border border-gold-200'
+                                : 'bg-rose-50 text-rose-500 border border-rose-200'
+                            }`}>
+                              {apt.assignmentType === 'specified' ? (
+                                <><UserCheck className="w-2 h-2" /> 指定</>
+                              ) : (
+                                <><Sparkles className="w-2 h-2" /> 推荐</>
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-brown-400 flex-wrap">
+                            <span>{formatDateTime(apt.startTime)}</span>
+                            {actualDuration && (
+                              <span className="flex items-center gap-0.5 text-gold-600">
+                                <Timer className="w-2.5 h-2.5" />
+                                实际{actualDuration}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-sm text-rose-500 font-medium">¥{service?.price || 0}</span>
+                        <span className="text-sm text-rose-500 font-medium flex-shrink-0">¥{service?.price || 0}</span>
                       </div>
                     );
                   })
