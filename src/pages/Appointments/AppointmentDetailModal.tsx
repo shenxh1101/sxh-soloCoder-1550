@@ -6,9 +6,10 @@ import { useCustomerStore } from '../../store/customerStore';
 import { useServiceStore } from '../../store/serviceStore';
 import { useStaffStore } from '../../store/staffStore';
 import { useInventoryStore } from '../../store/inventoryStore';
+import { useCouponStore } from '../../store/couponStore';
 import { AppointmentStatus, AssignmentTypeMap } from '../../types';
 import { formatDateTime, formatDuration, diffInMinutes } from '../../utils/date';
-import { UserCircle, Scissors, Clock, CalendarCheck, Package, Phone, Play, CheckCircle, XCircle, Sparkles, UserCheck, Timer } from 'lucide-react';
+import { UserCircle, Scissors, Clock, CalendarCheck, Package, Phone, Play, CheckCircle, XCircle, Sparkles, UserCheck, Timer, Ticket } from 'lucide-react';
 import { useAppointmentStore } from '../../store/appointmentStore';
 
 interface AppointmentDetailModalProps {
@@ -35,6 +36,8 @@ export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateS
   );
   const products = useInventoryStore(s => s.products);
   const consumeProductsForService = useInventoryStore(s => s.consumeProductsForService);
+  const coupons = useCouponStore(s => s.coupons);
+  const markCouponUsed = useCouponStore(s => s.markCouponUsed);
 
   const actualDuration = useMemo(() => {
     if (!appointment?.actualStart || !appointment?.actualEnd) return null;
@@ -56,9 +59,22 @@ export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateS
   };
 
   const handleComplete = () => {
-    completeService(appointment.id);
-    consumeProductsForService(appointment.id, service.products);
-    onClose();
+    const originalPrice = service.price;
+    const availableCoupon = coupons.find(
+      c => c.customerId === appointment.customerId && !c.used && new Date(c.expireDate) >= new Date()
+    );
+
+    let actualPrice = originalPrice;
+    let usedCouponId: string | undefined;
+
+    if (availableCoupon) {
+      actualPrice = Math.round(originalPrice * availableCoupon.discount * 100) / 100;
+      usedCouponId = availableCoupon.id;
+      markCouponUsed(availableCoupon.id, appointment.id);
+    }
+
+    completeService(appointment.id, { originalPrice, actualPrice, usedCouponId });
+    consumeProductsForService(appointment.id, service.products, service.name);
   };
 
   const handleCancel = () => {
@@ -72,6 +88,7 @@ export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateS
   const canStart = appointment.status === 'checked_in';
   const canComplete = appointment.status === 'in_service';
   const canCancel = ['pending', 'checked_in'].includes(appointment.status);
+  const isCompleted = appointment.status === 'completed';
 
   return (
     <Modal
@@ -98,6 +115,11 @@ export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateS
           {canComplete && (
             <Button onClick={handleComplete} icon={<CheckCircle className="w-4 h-4" />}>
               完成服务
+            </Button>
+          )}
+          {isCompleted && (
+            <Button onClick={onClose}>
+              关闭
             </Button>
           )}
         </>
@@ -198,17 +220,51 @@ export function AppointmentDetailModal({ open, onClose, appointmentId, onUpdateS
           </div>
         )}
 
-        {usedProducts.length > 0 && (
-          <div className="p-4 bg-rose-50 rounded-xl">
+        {isCompleted && appointment.originalPrice !== undefined && (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-gold-50 to-rose-50 border border-gold-100 mb-4">
             <div className="flex items-center gap-2 text-sm text-brown-500 mb-3">
-              <Package className="w-4 h-4 text-rose-500" />
-              <span>本次服务将消耗以下产品</span>
+              <Ticket className="w-4 h-4 text-gold-600" />
+              <span>消费明细</span>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-brown-500">项目原价</span>
+                <span className="text-brown-400 line-through">¥{appointment.originalPrice}</span>
+              </div>
+              {appointment.usedCouponId && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-brown-500">使用优惠券</span>
+                  <span className="text-rose-500 font-medium">
+                    {coupons.find(c => c.id === appointment.usedCouponId)?.name || '优惠券'}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-2 border-t border-gold-200">
+                <span className="text-brown-700 font-medium">实付金额</span>
+                <span className="text-xl font-bold text-rose-600">¥{appointment.actualPrice}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {usedProducts.length > 0 && (
+          <div className={`p-4 rounded-xl ${isCompleted ? 'bg-emerald-50 border border-emerald-100' : 'bg-rose-50'}`}>
+            <div className="flex items-center gap-2 text-sm text-brown-500 mb-3">
+              <Package className={`w-4 h-4 ${isCompleted ? 'text-emerald-500' : 'text-rose-500'}`} />
+              <span>{isCompleted ? '本次服务已消耗产品' : '本次服务将消耗以下产品'}</span>
             </div>
             <div className="space-y-2">
               {usedProducts.map(({ product, quantity }) => (
                 <div key={product!.id} className="flex items-center justify-between text-sm">
                   <span className="text-brown-700">{product!.name}</span>
-                  <span className="text-brown-500">{quantity} {product!.unit}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-brown-500">{quantity} {product!.unit}</span>
+                    {isCompleted && (
+                      <span className="text-xs text-emerald-600 font-medium">
+                        剩余 {product!.stock} {product!.unit}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

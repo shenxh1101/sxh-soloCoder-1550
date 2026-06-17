@@ -1,17 +1,20 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useInventoryStore } from '../../store/inventoryStore';
+import { useAppointmentStore } from '../../store/appointmentStore';
 import { PageHeader, Card } from '../../components/Layout/PageHeader';
 import { Button } from '../../components/Button';
 import { Modal } from '../../components/Modal';
-import { Package, Plus, AlertTriangle, ArrowUpDown, History } from 'lucide-react';
+import { Package, Plus, AlertTriangle, ArrowUpDown, History, TrendingUp, Zap } from 'lucide-react';
 import { InventoryLogType, InventoryLogTypeMap } from '../../types';
-import { formatDateTime } from '../../utils/date';
+import { formatDateTime, formatDate } from '../../utils/date';
 
 export function Inventory() {
-  const { products, inventoryLogs, addProduct, addInventory, getLowStockProducts } = useInventoryStore();
+  const { products, inventoryLogs, addProduct, addInventory, getLowStockProducts, getProductLogs, generateRestockSuggestion, batchRestockLowStock } = useInventoryStore();
+  const appointments = useAppointmentStore(s => s.appointments);
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [showStockIn, setShowStockIn] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showProductDetail, setShowProductDetail] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   
   const [newName, setNewName] = useState('');
@@ -24,6 +27,21 @@ export function Inventory() {
   const [stockInRemark, setStockInRemark] = useState('');
 
   const lowStockProducts = getLowStockProducts();
+  
+  const selectedProduct = useMemo(() => 
+    products.find(p => p.id === selectedProductId), 
+    [products, selectedProductId]
+  );
+  
+  const productLogs = useMemo(() => 
+    selectedProductId ? getProductLogs(selectedProductId) : [], 
+    [selectedProductId, getProductLogs]
+  );
+  
+  const restockSuggestion = useMemo(() => 
+    selectedProductId ? generateRestockSuggestion(selectedProductId) : { quantity: 0, reason: '' },
+    [selectedProductId, generateRestockSuggestion]
+  );
 
   const handleAddProduct = () => {
     if (!newName.trim() || !newUnit.trim()) return;
@@ -60,6 +78,17 @@ export function Inventory() {
     setShowStockIn(true);
   };
 
+  const openProductDetail = (productId: string) => {
+    setSelectedProductId(productId);
+    setShowProductDetail(true);
+  };
+
+  const handleBatchRestock = () => {
+    if (confirm(`确定为 ${lowStockProducts.length} 件低库存产品按建议量补货吗？`)) {
+      batchRestockLowStock();
+    }
+  };
+
   const logColors: Record<InventoryLogType, string> = {
     in: 'text-emerald-600 bg-emerald-50',
     out: 'text-rose-600 bg-rose-50',
@@ -91,10 +120,19 @@ export function Inventory() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-rose-500 mt-0.5 animate-breathe" />
             <div className="flex-1">
-              <p className="font-medium text-brown-700 mb-2">有 {lowStockProducts.length} 件产品库存不足</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium text-brown-700">有 {lowStockProducts.length} 件产品库存不足</p>
+                <Button size="sm" variant="secondary" onClick={handleBatchRestock} icon={<Zap className="w-3.5 h-3.5" />}>
+                  一键补货
+                </Button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {lowStockProducts.map(p => (
-                  <span key={p.id} className="text-sm px-3 py-1 rounded-full bg-white/80 text-rose-600">
+                  <span 
+                    key={p.id} 
+                    className="text-sm px-3 py-1 rounded-full bg-white/80 text-rose-600 cursor-pointer hover:bg-white transition-colors"
+                    onClick={() => openProductDetail(p.id)}
+                  >
                     {p.name}：仅剩 {p.stock} {p.unit}
                   </span>
                 ))}
@@ -112,8 +150,9 @@ export function Inventory() {
           return (
             <Card 
               key={product.id} 
-              className={`opacity-0 animate-fade-in-up ${isLow && 'border-rose-300 border-2'}`}
+              className={`opacity-0 animate-fade-in-up cursor-pointer ${isLow && 'border-rose-300 border-2'}`}
               style={{ animationDelay: `${idx * 0.05}s`, animationFillMode: 'forwards' }}
+              onClick={() => openProductDetail(product.id)}
             >
               <div className="p-5">
                 <div className="flex items-start justify-between mb-3">
@@ -155,10 +194,26 @@ export function Inventory() {
                   </div>
                 </div>
 
-                <Button size="sm" variant="secondary" className="w-full" onClick={() => openStockIn(product.id)}>
-                  <ArrowUpDown className="w-3.5 h-3.5" />
-                  入库登记
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="flex-1" 
+                    onClick={e => { e.stopPropagation(); openStockIn(product.id); }}
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" />
+                    入库
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="secondary" 
+                    className="flex-1"
+                    onClick={e => { e.stopPropagation(); openProductDetail(product.id); }}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    详情
+                  </Button>
+                </div>
               </div>
             </Card>
           );
@@ -309,6 +364,116 @@ export function Inventory() {
             })
           )}
         </div>
+      </Modal>
+
+      <Modal
+        open={showProductDetail}
+        onClose={() => { setShowProductDetail(false); setSelectedProductId(''); }}
+        title="产品详情"
+        footer={
+          selectedProduct && (
+            <>
+              <Button 
+                variant="secondary" 
+                onClick={() => { 
+                  setShowProductDetail(false); 
+                  openStockIn(selectedProduct.id); 
+                }}
+                icon={<ArrowUpDown className="w-4 h-4" />}
+              >
+                入库登记
+              </Button>
+              {restockSuggestion.quantity > 0 && (
+                <Button 
+                  onClick={() => { 
+                    addInventory(selectedProduct.id, restockSuggestion.quantity, '建议补货');
+                  }}
+                  icon={<TrendingUp className="w-4 h-4" />}
+                >
+                  按建议补货 ({restockSuggestion.quantity})
+                </Button>
+              )}
+            </>
+          )
+        }
+      >
+        {selectedProduct && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-4">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${
+                selectedProduct.stock <= selectedProduct.warningThreshold ? 'bg-rose-100' : 'bg-cream-100'
+              }`}>
+                <Package className={`w-8 h-8 ${
+                  selectedProduct.stock <= selectedProduct.warningThreshold ? 'text-rose-500' : 'text-rose-400'
+                }`} />
+              </div>
+              <div>
+                <h3 className="font-serif text-xl font-semibold text-brown-700">{selectedProduct.name}</h3>
+                <p className="text-sm text-brown-400 mt-1">成本价 ¥{selectedProduct.costPrice}/{selectedProduct.unit}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-cream-50 rounded-xl">
+                <p className="text-sm text-brown-400 mb-1">当前库存</p>
+                <p className={`text-2xl font-bold font-serif ${
+                  selectedProduct.stock <= selectedProduct.warningThreshold ? 'text-rose-500' : 'text-brown-700'
+                }`}>
+                  {selectedProduct.stock}
+                  <span className="text-sm font-normal text-brown-400 ml-1">{selectedProduct.unit}</span>
+                </p>
+              </div>
+              <div className="p-4 bg-cream-50 rounded-xl">
+                <p className="text-sm text-brown-400 mb-1">预警阈值</p>
+                <p className="text-2xl font-bold font-serif text-brown-700">
+                  {selectedProduct.warningThreshold}
+                  <span className="text-sm font-normal text-brown-400 ml-1">{selectedProduct.unit}</span>
+                </p>
+              </div>
+            </div>
+
+            {restockSuggestion.quantity > 0 && (
+              <div className="p-4 bg-gold-50 rounded-xl border border-gold-100">
+                <div className="flex items-center gap-2 text-sm text-gold-700 font-medium mb-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>补货建议</span>
+                </div>
+                <p className="text-lg font-bold text-gold-600 mb-1">建议补货 {restockSuggestion.quantity} {selectedProduct.unit}</p>
+                <p className="text-xs text-brown-500">{restockSuggestion.reason}</p>
+              </div>
+            )}
+
+            <div>
+              <h4 className="font-medium text-brown-700 mb-3 flex items-center gap-2">
+                <History className="w-4 h-4" />
+                出入库记录
+              </h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {productLogs.length === 0 ? (
+                  <p className="text-center py-6 text-brown-400 text-sm">暂无记录</p>
+                ) : (
+                  productLogs.map(log => {
+                    const apt = appointments.find(a => a.id === log.appointmentId);
+                    return (
+                      <div key={log.id} className="flex items-center justify-between p-3 bg-cream-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-brown-700 text-sm">{log.remark}</p>
+                          <p className="text-xs text-brown-400">{formatDateTime(log.createdAt)}</p>
+                          {apt && (
+                            <p className="text-xs text-rose-400 mt-0.5">关联预约 · {formatDate(apt.startTime)}</p>
+                          )}
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${logColors[log.type]}`}>
+                          {InventoryLogTypeMap[log.type]} {log.type === 'in' ? '+' : '-'}{log.quantity}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

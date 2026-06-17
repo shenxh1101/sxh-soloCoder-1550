@@ -7,7 +7,7 @@ import { addDays, format } from 'date-fns';
 interface CouponState {
   coupons: Coupon[];
   issueCoupon: (customerId: string, name: string, discount: number, validDays?: number) => void;
-  markCouponUsed: (couponId: string) => void;
+  markCouponUsed: (couponId: string, appointmentId?: string) => void;
   getCustomerCoupons: (customerId: string) => Coupon[];
   deleteCoupon: (couponId: string) => void;
 }
@@ -31,9 +31,14 @@ export const useCouponStore = create<CouponState>((set, get) => ({
     saveToStorage(STORAGE_KEY, updated);
   },
 
-  markCouponUsed: (couponId) => {
+  markCouponUsed: (couponId, appointmentId) => {
     const updated = get().coupons.map(c =>
-      c.id === couponId ? { ...c, used: true } : c
+      c.id === couponId ? { 
+        ...c, 
+        used: true,
+        usedAt: new Date().toISOString(),
+        usedInAppointmentId: appointmentId
+      } : c
     );
     set({ coupons: updated });
     saveToStorage(STORAGE_KEY, updated);

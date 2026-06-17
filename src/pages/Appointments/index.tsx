@@ -4,14 +4,16 @@ import { useCustomerStore } from '../../store/customerStore';
 import { useServiceStore } from '../../store/serviceStore';
 import { useStaffStore } from '../../store/staffStore';
 import { useInventoryStore } from '../../store/inventoryStore';
+import { useCouponStore } from '../../store/couponStore';
 import { PageHeader, Card } from '../../components/Layout/PageHeader';
 import { StatusTag } from '../../components/StatusTag';
 import { Button } from '../../components/Button';
 import { NewAppointmentModal } from './NewAppointmentModal';
 import { AppointmentDetailModal } from './AppointmentDetailModal';
-import { AppointmentStatus, AppointmentStatusMap, AssignmentTypeMap } from '../../types';
+import { StaffScheduleView } from './StaffScheduleView';
+import { Appointment, AppointmentStatus, AppointmentStatusMap, AssignmentTypeMap } from '../../types';
 import { formatDate, formatTime, formatDateCn, diffInMinutes, formatDuration } from '../../utils/date';
-import { Plus, CalendarCheck, UserCircle, Scissors, Search, Filter, Sparkles, UserCheck, Timer } from 'lucide-react';
+import { Plus, CalendarCheck, UserCircle, Scissors, Search, Filter, Sparkles, UserCheck, Timer, LayoutList, CalendarDays } from 'lucide-react';
 
 export function Appointments() {
   const [showNewModal, setShowNewModal] = useState(false);
@@ -21,12 +23,15 @@ export function Appointments() {
   const [filterStatus, setFilterStatus] = useState<AppointmentStatus | 'all'>('all');
   const [filterStaff, setFilterStaff] = useState<string>('all');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'schedule'>('list');
 
   const appointments = useAppointmentStore(s => s.appointments);
   const updateAppointmentStatus = useAppointmentStore(s => s.updateAppointmentStatus);
   const startService = useAppointmentStore(s => s.startService);
   const completeService = useAppointmentStore(s => s.completeService);
   const consumeProductsForService = useInventoryStore(s => s.consumeProductsForService);
+  const coupons = useCouponStore(s => s.coupons);
+  const markCouponUsed = useCouponStore(s => s.markCouponUsed);
   const services = useServiceStore(s => s.services);
   const customers = useCustomerStore(s => s.customers);
   const staffList = useStaffStore(s => s.staffList);
@@ -59,13 +64,26 @@ export function Appointments() {
 
   const handleCompleteService = (id: string) => {
     const apt = appointments.find(a => a.id === id);
-    completeService(id);
-    if (apt) {
-      const service = getServiceById(apt.serviceId);
-      if (service) {
-        consumeProductsForService(apt.id, service.products);
-      }
+    if (!apt) return;
+    const service = getServiceById(apt.serviceId);
+    if (!service) return;
+
+    const originalPrice = service.price;
+    const availableCoupon = coupons.find(
+      c => c.customerId === apt.customerId && !c.used && new Date(c.expireDate) >= new Date()
+    );
+
+    let actualPrice = originalPrice;
+    let usedCouponId: string | undefined;
+
+    if (availableCoupon) {
+      actualPrice = Math.round(originalPrice * availableCoupon.discount * 100) / 100;
+      usedCouponId = availableCoupon.id;
+      markCouponUsed(availableCoupon.id, apt.id);
     }
+
+    completeService(id, { originalPrice, actualPrice, usedCouponId });
+    consumeProductsForService(apt.id, service.products, service.name);
   };
 
   const handleAppointmentCreated = (date: string) => {
@@ -92,7 +110,34 @@ export function Appointments() {
         }
       />
 
-      <Card className="mb-6 p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={() => setViewMode('list')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+            viewMode === 'list'
+              ? 'bg-white text-rose-600 shadow-sm border border-rose-100'
+              : 'text-brown-500 hover:bg-white/50'
+          }`}
+        >
+          <LayoutList className="w-4 h-4" />
+          列表视图
+        </button>
+        <button
+          onClick={() => setViewMode('schedule')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+            viewMode === 'schedule'
+              ? 'bg-white text-rose-600 shadow-sm border border-rose-100'
+              : 'text-brown-500 hover:bg-white/50'
+          }`}
+        >
+          <CalendarDays className="w-4 h-4" />
+          排班视图
+        </button>
+      </div>
+
+      {viewMode === 'list' && (
+        <>
+        <Card className="mb-6 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brown-400" />
@@ -259,6 +304,19 @@ export function Appointments() {
           })
         )}
       </div>
+        </>
+      )}
+
+      {viewMode === 'schedule' && (
+        <StaffScheduleView
+          date={filterDate}
+          onAppointmentClick={apt => {
+            setSelectedAppointmentId(apt.id);
+            setShowDetailModal(true);
+          }}
+          onNewAppointment={() => setShowNewModal(true)}
+        />
+      )}
 
       <NewAppointmentModal 
         open={showNewModal} 

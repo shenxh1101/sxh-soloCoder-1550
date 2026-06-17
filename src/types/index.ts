@@ -82,6 +82,9 @@ export interface Appointment {
   actualStart?: string;
   actualEnd?: string;
   createdAt: string;
+  originalPrice?: number;
+  actualPrice?: number;
+  usedCouponId?: string;
 }
 
 export interface ServiceRecord {
@@ -116,6 +119,7 @@ export interface InventoryLog {
   quantity: number;
   remark: string;
   createdAt: string;
+  appointmentId?: string;
 }
 
 export interface Coupon {
@@ -125,4 +129,6 @@ export interface Coupon {
   discount: number;
   expireDate: string;
   used: boolean;
+  usedAt?: string;
+  usedInAppointmentId?: string;
 }

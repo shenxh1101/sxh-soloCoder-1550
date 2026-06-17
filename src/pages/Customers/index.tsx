@@ -396,10 +396,15 @@ export function Customers() {
                     const actualDuration = apt.actualStart && apt.actualEnd
                       ? formatDuration(diffInMinutes(apt.actualStart, apt.actualEnd))
                       : null;
+                    const usedCoupon = apt.usedCouponId
+                      ? coupons.find(c => c.id === apt.usedCouponId)
+                      : null;
+                    const displayPrice = apt.actualPrice !== undefined ? apt.actualPrice : service?.price || 0;
+                    const originalPrice = apt.originalPrice !== undefined ? apt.originalPrice : service?.price || 0;
                     return (
-                      <div key={apt.id} className="flex items-center justify-between p-3 bg-cream-50 rounded-lg gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <div key={apt.id} className="p-3 bg-cream-50 rounded-lg">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0">
                             <p className="text-sm font-medium text-brown-700">{service?.name || '未知项目'}</p>
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
                               apt.assignmentType === 'specified'
@@ -413,17 +418,32 @@ export function Customers() {
                               )}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-brown-400 flex-wrap">
-                            <span>{formatDateTime(apt.startTime)}</span>
-                            {actualDuration && (
-                              <span className="flex items-center gap-0.5 text-gold-600">
-                                <Timer className="w-2.5 h-2.5" />
-                                实际{actualDuration}
-                              </span>
+                          <div className="text-right flex-shrink-0">
+                            {usedCoupon ? (
+                              <div>
+                                <span className="text-xs text-brown-400 line-through mr-1">¥{originalPrice}</span>
+                                <span className="text-sm text-rose-500 font-medium">¥{displayPrice}</span>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-rose-500 font-medium">¥{displayPrice}</span>
                             )}
                           </div>
                         </div>
-                        <span className="text-sm text-rose-500 font-medium flex-shrink-0">¥{service?.price || 0}</span>
+                        <div className="flex items-center gap-2 text-xs text-brown-400 flex-wrap">
+                          <span>{formatDateTime(apt.startTime)}</span>
+                          {actualDuration && (
+                            <span className="flex items-center gap-0.5 text-gold-600">
+                              <Timer className="w-2.5 h-2.5" />
+                              实际{actualDuration}
+                            </span>
+                          )}
+                          {usedCoupon && (
+                            <span className="flex items-center gap-0.5 text-rose-500">
+                              <Ticket className="w-2.5 h-2.5" />
+                              {usedCoupon.name}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })

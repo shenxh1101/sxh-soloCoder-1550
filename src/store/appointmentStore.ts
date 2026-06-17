@@ -8,7 +8,7 @@ interface AppointmentState {
   addAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => void;
   updateAppointmentStatus: (id: string, status: AppointmentStatus) => void;
   startService: (id: string) => void;
-  completeService: (id: string) => void;
+  completeService: (id: string, priceInfo?: { originalPrice: number; actualPrice: number; usedCouponId?: string }) => void;
   updateAssignmentType: (id: string, assignmentType: AssignmentType) => void;
   deleteAppointment: (id: string) => void;
   getAppointmentById: (id: string) => Appointment | undefined;
@@ -52,12 +52,13 @@ export const useAppointmentStore = create<AppointmentState>((set, get) => ({
     saveToStorage(STORAGE_KEY, updated);
   },
 
-  completeService: (id) => {
+  completeService: (id, priceInfo) => {
     const updated = get().appointments.map(a => 
       a.id === id ? { 
         ...a, 
         status: 'completed' as AppointmentStatus,
-        actualEnd: new Date().toISOString()
+        actualEnd: new Date().toISOString(),
+        ...(priceInfo || {})
       } : a
     );
     set({ appointments: updated });

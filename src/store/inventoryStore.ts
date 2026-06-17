@@ -12,9 +12,12 @@ interface InventoryState {
   getProductById: (id: string) => Product | undefined;
   addInventory: (productId: string, quantity: number, remark?: string) => void;
   consumeInventory: (productId: string, quantity: number, remark?: string) => void;
-  consumeProductsForService: (appointmentIdOrService: string | Service, productsOrRemark?: ServiceProductItem[] | string, remark?: string) => void;
+  consumeProductsForService: (appointmentId: string, products: ServiceProductItem[], serviceName?: string) => void;
   getLowStockProducts: () => Product[];
   addLog: (log: Omit<InventoryLog, 'id' | 'createdAt'>) => void;
+  getProductLogs: (productId: string) => InventoryLog[];
+  generateRestockSuggestion: (productId: string) => { quantity: number; reason: string };
+  batchRestockLowStock: () => void;
 }
 
 const STORAGE_KEY_PRODUCTS = 'beauty_products';
@@ -79,21 +82,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     get().addLog({ productId, type: 'consume', quantity, remark });
   },
   
-  consumeProductsForService: (appointmentIdOrService, productsOrRemark, remark = '服务消耗') => {
-    let products: ServiceProductItem[] = [];
-    let logRemark = remark;
-    let serviceName = '';
-
-    if (typeof appointmentIdOrService === 'string') {
-      products = (productsOrRemark as ServiceProductItem[]) || [];
-      logRemark = typeof productsOrRemark === 'string' ? productsOrRemark : remark;
-    } else {
-      const service = appointmentIdOrService;
-      products = service.products;
-      serviceName = service.name;
-      logRemark = typeof productsOrRemark === 'string' ? productsOrRemark : '服务消耗';
-    }
-
+  consumeProductsForService: (appointmentId, products, serviceName = '') => {
     const updated = get().products.map(p => {
       const usage = products.find(sp => sp.productId === p.id);
       if (usage) {
@@ -105,11 +94,56 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     saveToStorage(STORAGE_KEY_PRODUCTS, updated);
     
     for (const sp of products) {
-      const suffix = serviceName ? ` - ${serviceName}` : '';
-      get().addLog({ productId: sp.productId, type: 'consume', quantity: sp.quantity, remark: `${logRemark}${suffix}` });
+      const remark = serviceName ? `服务消耗 - ${serviceName}` : '服务消耗';
+      get().addLog({ 
+        productId: sp.productId, 
+        type: 'consume', 
+        quantity: sp.quantity, 
+        remark,
+        appointmentId
+      });
     }
   },
   
   getLowStockProducts: () => 
     get().products.filter(p => p.stock <= p.warningThreshold),
+  
+  getProductLogs: (productId) => 
+    get().inventoryLogs
+      .filter(l => l.productId === productId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+  
+  generateRestockSuggestion: (productId) => {
+    const product = get().getProductById(productId);
+    if (!product) return { quantity: 0, reason: '产品不存在' };
+    
+    const targetStock = product.warningThreshold * 3;
+    const needQuantity = Math.max(0, targetStock - product.stock);
+    
+    const recentConsume = get().inventoryLogs
+      .filter(l => l.productId === productId && l.type === 'consume')
+      .slice(0, 10);
+    const avgConsume = recentConsume.length > 0
+      ? recentConsume.reduce((sum, l) => sum + l.quantity, 0) / recentConsume.length
+      : product.warningThreshold * 0.5;
+    
+    if (needQuantity <= 0) {
+      return { quantity: 0, reason: '库存充足，无需补货' };
+    }
+    
+    return {
+      quantity: Math.ceil(needQuantity / 10) * 10,
+      reason: `目标库存 ${targetStock} ${product.unit}（预警值 3 倍），建议补货约 ${Math.ceil(avgConsume * 10)} ${product.unit}/月`
+    };
+  },
+  
+  batchRestockLowStock: () => {
+    const lowStock = get().getLowStockProducts();
+    for (const p of lowStock) {
+      const suggestion = get().generateRestockSuggestion(p.id);
+      if (suggestion.quantity > 0) {
+        get().addInventory(p.id, suggestion.quantity, '系统建议补货');
+      }
+    }
+  },
 }));

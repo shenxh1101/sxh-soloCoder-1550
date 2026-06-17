@@ -8,7 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { BarChart3, TrendingUp, UserCircle, Scissors, CalendarCheck, UserCheck } from 'lucide-react';
+import { BarChart3, TrendingUp, UserCircle, Scissors, CalendarCheck, UserCheck, Users, Sparkles } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, isWithinInterval } from 'date-fns';
 
 const COLORS = ['#E8B4B8', '#D4A574', '#C46B72', '#A97449', '#D98C91', '#DEBF86'];
@@ -89,6 +89,41 @@ export function Statistics() {
   const topStaff = staffStats[0];
   const topService = serviceStats[0];
   const topSpecifiedMax = Math.max(...staffStats.map(s => s.specified), 1);
+
+  const customerContribution = useMemo(() => {
+    const stats: Record<string, { name: string; count: number; revenue: number; phone: string }> = {};
+    for (const apt of completedAppointments) {
+      const customer = customers.find(c => c.id === apt.customerId);
+      if (!customer) continue;
+      const service = services.find(s => s.id === apt.serviceId);
+      const revenue = apt.actualPrice !== undefined ? apt.actualPrice : service?.price || 0;
+      if (!stats[customer.id]) {
+        stats[customer.id] = { name: customer.name, count: 0, revenue: 0, phone: customer.phone };
+      }
+      stats[customer.id].count++;
+      stats[customer.id].revenue += revenue;
+    }
+    return Object.values(stats).sort((a, b) => b.revenue - a.revenue);
+  }, [completedAppointments, customers, services]);
+
+  const topCustomerRevenue = customerContribution[0]?.revenue || 1;
+
+  const serviceRevenueStats = useMemo(() => {
+    const stats: Record<string, { name: string; count: number; revenue: number }> = {};
+    for (const apt of completedAppointments) {
+      const service = services.find(s => s.id === apt.serviceId);
+      if (!service) continue;
+      const revenue = apt.actualPrice !== undefined ? apt.actualPrice : service.price;
+      if (!stats[service.id]) {
+        stats[service.id] = { name: service.name, count: 0, revenue: 0 };
+      }
+      stats[service.id].count++;
+      stats[service.id].revenue += revenue;
+    }
+    return Object.values(stats).sort((a, b) => b.revenue - a.revenue);
+  }, [completedAppointments, services]);
+
+  const topServiceRevenue = serviceRevenueStats[0]?.revenue || 1;
 
   return (
     <div>
@@ -303,6 +338,100 @@ export function Statistics() {
                 </div>
               </div>
             ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-6 mt-6">
+        <Card className="p-6 opacity-0 animate-fade-in-up stagger-1">
+          <h3 className="font-serif text-lg font-semibold text-brown-700 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-rose-500" />
+            客户消费贡献排行
+            <span className="ml-auto text-xs text-brown-400 font-normal">
+              按实际消费金额排序
+            </span>
+          </h3>
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+            {customerContribution.length === 0 ? (
+              <p className="text-center py-8 text-brown-400 text-sm">暂无消费数据</p>
+            ) : (
+              customerContribution.slice(0, 10).map((cust, idx) => (
+                <div key={cust.name} className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                    idx === 0 ? 'bg-gradient-to-br from-gold-400 to-gold-500 text-white shadow-soft' :
+                    idx === 1 ? 'bg-gradient-to-br from-brown-300 to-brown-400 text-white' :
+                    idx === 2 ? 'bg-gradient-to-br from-rose-300 to-rose-400 text-white' :
+                    'bg-cream-100 text-brown-500'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-rose-300 to-gold-300 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                    {cust.name[0]}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <span className="font-medium text-brown-700 text-sm">{cust.name}</span>
+                      <span className="text-xs text-brown-400">{cust.count} 次</span>
+                    </div>
+                    <div className="w-full bg-cream-200 rounded-full h-2">
+                      <div 
+                        className="h-2 rounded-full bg-gradient-to-r from-rose-400 to-rose-500 transition-all"
+                        style={{ width: `${Math.min(100, (cust.revenue / topCustomerRevenue) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 min-w-[70px]">
+                    <p className="text-sm font-bold text-rose-600">¥{cust.revenue.toLocaleString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-6 opacity-0 animate-fade-in-up stagger-2">
+          <h3 className="font-serif text-lg font-semibold text-brown-700 mb-4 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-gold-500" />
+            项目营收贡献排行
+            <span className="ml-auto text-xs text-brown-400 font-normal">
+              按实际营收金额排序
+            </span>
+          </h3>
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-2">
+            {serviceRevenueStats.length === 0 ? (
+              <p className="text-center py-8 text-brown-400 text-sm">暂无营收数据</p>
+            ) : (
+              serviceRevenueStats.map((svc, idx) => (
+                <div key={svc.name} className="flex items-center gap-3">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                    idx === 0 ? 'bg-gradient-to-br from-gold-400 to-gold-500 text-white shadow-soft' :
+                    idx === 1 ? 'bg-gradient-to-br from-brown-300 to-brown-400 text-white' :
+                    idx === 2 ? 'bg-gradient-to-br from-rose-300 to-rose-400 text-white' :
+                    'bg-cream-100 text-brown-500'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gold-300 to-rose-300 flex items-center justify-center text-white flex-shrink-0">
+                    <Scissors className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1 gap-2">
+                      <span className="font-medium text-brown-700 text-sm">{svc.name}</span>
+                      <span className="text-xs text-brown-400">{svc.count} 次</span>
+                    </div>
+                    <div className="w-full bg-cream-200 rounded-full h-2">
+                      <div 
+                        className="h-2 rounded-full bg-gradient-to-r from-gold-400 to-gold-500 transition-all"
+                        style={{ width: `${Math.min(100, (svc.revenue / topServiceRevenue) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0 min-w-[70px]">
+                    <p className="text-sm font-bold text-gold-600">¥{svc.revenue.toLocaleString()}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </div>
